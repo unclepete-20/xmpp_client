@@ -60,10 +60,17 @@ public final class App {
 
         Login login = new Login(user, password);
 
-        AbstractXMPPConnection connection = login.login();
-
-        UserMenu menu = new UserMenu(connection);
-        menu.showMenu(scanner);
+        try { 
+            AbstractXMPPConnection connection = login.login();
+            if (connection.isAuthenticated()) {
+                UserMenu menu = new UserMenu(connection);
+                menu.showMenu(scanner);
+            } else {
+                System.out.println("\nFailed to authenticate connection.\n");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private static void registrarse(Scanner scanner) throws IOException {

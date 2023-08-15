@@ -3,10 +3,8 @@ package com.xmpp_client;
 import org.jivesoftware.smack.AbstractXMPPConnection;
 import org.jivesoftware.smack.XMPPException;
 import org.jivesoftware.smack.packet.Presence;
-import org.jivesoftware.smack.packet.PresenceBuilder;
-import org.jivesoftware.smack.packet.StanzaBuilder;
 import org.jivesoftware.smack.roster.Roster;
-import org.jxmpp.jid.BareJid;
+import org.jivesoftware.smackx.iqregister.AccountManager;
 import org.jivesoftware.smack.SmackException;
 
 import java.util.Scanner;
@@ -20,6 +18,7 @@ public class UserMenu {
     }
 
     public void showMenu(Scanner scanner) throws XMPPException, SmackException, InterruptedException {
+
         boolean exit = false;
 
         while (!exit) {
@@ -28,10 +27,9 @@ public class UserMenu {
             System.out.println("2. Update Presence Status");
             System.out.println("3. Manage Messages");
             System.out.println("4. Manage Contacts");
-            System.out.println("5. Delete User");
+            System.out.println("5. Delete Account");
             System.out.println("6. Log Out");
-            System.out.println("7. Exit");
-            System.out.print("Enter your choice: ");
+            System.out.print("\nEnter your choice: ");
 
             int choice = scanner.nextInt();
 
@@ -46,19 +44,18 @@ public class UserMenu {
                     // Manage Contacts
                     break;
                 case 4:
-                    // Delete User
+                    
                     break;
                 case 5:
-
+                    deleteUser();
+                    exit = true;
                     break;
                 case 6:
                     logOut();
-                    break;
-                case 7:
                     exit = true;
                     break;
                 default:
-                    System.out.println("Invalid choice. Please try again.");
+                    System.out.println("\nInvalid choice. Please try again.\n");
             }
         }
     }
@@ -89,7 +86,7 @@ public class UserMenu {
         }
     
         connection.sendStanza(updatedPresence);
-        System.out.println("Presence status updated successfully!");
+        System.out.println("\nPresence status updated successfully!\n");
     }
     
     
@@ -97,7 +94,7 @@ public class UserMenu {
 
     private void logOut() {
         connection.disconnect();
-        System.out.println("Logged out successfully!");
+        System.out.println("\nLogged out successfully!\n");
     }
 
     private void showProfile() {
@@ -110,6 +107,17 @@ public class UserMenu {
         System.out.println("Status: " + presence.getStatus());
         System.out.println("Mode: " + presence.getMode());
     }
+
+    private void deleteUser() throws InterruptedException {
+        try {
+            AccountManager accountManager = AccountManager.getInstance(connection);
+            accountManager.deleteAccount();
+            System.out.println("\nAccount deleted successfully!\n");
+        } catch (XMPPException | SmackException e) {
+            System.out.println("\nFailed to delete account: " + e.getMessage());
+        }
+    }
+    
 
 }
 

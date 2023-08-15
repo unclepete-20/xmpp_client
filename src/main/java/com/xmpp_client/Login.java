@@ -66,7 +66,7 @@ public class Login {
         try {
             conn.connect();
             if (conn.isConnected()) {
-                System.out.println("Connected");
+                System.out.println("\nConnected to the server...\n");
             }
     
             // Authenticate the user by calling the login() method
@@ -74,9 +74,9 @@ public class Login {
     
             // Check if authenticated successfully
             if (conn.isAuthenticated()) {
-                System.out.println("Authenticated successfully");
+                System.out.println("\nAuthenticated successfully!\n");
             } else {
-                System.out.println("Failed to authenticate connection.");
+                System.out.println("\nFailed to authenticate connection.\n");
             }
         } catch (SmackException | IOException | XMPPException | InterruptedException e) {
             e.printStackTrace();
