@@ -17,7 +17,7 @@ import java.io.IOException;
 import io.github.cdimascio.dotenv.Dotenv;
 
 public class Register {
-    
+
     private String user;
     private String password;
 
@@ -26,7 +26,7 @@ public class Register {
         this.password = password;
     }
 
-    // Getter y Setter para el nombre de user
+    // Getter and Setter for username
     public String getUser() {
         return user;
     }
@@ -35,7 +35,7 @@ public class Register {
         this.user = user;
     }
 
-    // Getter y Setter para la contraseña
+    // Getter and Setter for password
     public String getPassword() {
         return password;
     }
@@ -45,29 +45,31 @@ public class Register {
     }
 
     public void register() throws IOException {
-        
+
         Dotenv dotenv = Dotenv.load();
 
         String username = getUser();
         String password = getPassword();
         String host = dotenv.get("HOST");
 
-        String xmppDomainString = host; 
-
+        String xmppDomainString = host;
         DomainBareJid xmppDomain = JidCreate.domainBareFrom(xmppDomainString);
 
-        System.out.println(host);
-
+        System.out.println("========================================");
+        System.out.println("          Registering New User           ");
+        System.out.println("  Host: " + host);
+        System.out.println("  Username: " + username);
+        System.out.println("========================================");
 
         try {
             SmackConfiguration.DEBUG = true;
 
             XMPPTCPConnectionConfiguration config = XMPPTCPConnectionConfiguration.builder()
-                    .setUsernameAndPassword(username, password)
-                    .setXmppDomain(xmppDomain)
-                    .setHost(host)
-                    .setSecurityMode(SecurityMode.disabled)
-                    .build();
+                .setUsernameAndPassword(username, password)
+                .setXmppDomain(xmppDomain)
+                .setHost(host)
+                .setSecurityMode(SecurityMode.disabled)
+                .build();
 
             AbstractXMPPConnection connection = new XMPPTCPConnection(config);
             connection.connect();
@@ -76,11 +78,13 @@ public class Register {
             accountManager.sensitiveOperationOverInsecureConnection(true);
             accountManager.createAccount(Localpart.from(username), password);
 
-            System.out.println("Account created successfully");
+            System.out.println("\nAccount created successfully!\n");
             connection.disconnect();
         } 
-        catch (SmackException | XMPPException | InterruptedException | IOException e) {
+        catch (SmackException | XMPPException | InterruptedException e) {
+            System.out.println("[ERROR] An error occurred during registration.");
             e.printStackTrace();
         }
     }
 }
+

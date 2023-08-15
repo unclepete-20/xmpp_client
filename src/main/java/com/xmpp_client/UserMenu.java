@@ -6,7 +6,10 @@ import org.jivesoftware.smack.packet.Presence;
 import org.jivesoftware.smack.roster.Roster;
 import org.jivesoftware.smack.roster.RosterEntry;
 import org.jivesoftware.smackx.iqregister.AccountManager;
+import org.jivesoftware.smackx.vcardtemp.VCardManager;
+import org.jivesoftware.smackx.vcardtemp.packet.VCard;
 import org.jxmpp.jid.BareJid;
+import org.jxmpp.jid.EntityBareJid;
 import org.jxmpp.jid.impl.JidCreate;
 import org.jxmpp.stringprep.XmppStringprepException;
 import org.jivesoftware.smack.SmackException;
@@ -56,7 +59,7 @@ public class UserMenu {
                 
                     break;
                 case 6:
-                
+                    manageContactsMenu(scanner);
                     break;
                 case 7:
                     deleteUser();
@@ -73,6 +76,7 @@ public class UserMenu {
     }
 
     private void updatePresence(Scanner scanner) throws SmackException.NotConnectedException, InterruptedException {
+        displayHeader("Update Presence Status");
         System.out.println("=== Update Presence Status ===");
         System.out.println("1. Available");
         System.out.println("2. Away");
@@ -110,6 +114,7 @@ public class UserMenu {
     }
 
     private void showProfile() {
+        displayHeader("My Profile");
         String username = connection.getUser().toString(); // Get the entire JID as a string
         Roster roster = Roster.getInstanceFor(connection);
         Presence presence = roster.getPresence(connection.getUser().asEntityBareJidIfPossible()); // Get presence for the user's bare JID
@@ -131,6 +136,7 @@ public class UserMenu {
     }
 
     private void addNewContact(Scanner scanner) {
+        displayHeader("Add New Contact");
         System.out.print("Enter the JID of the contact you want to add: ");
         String jidString = scanner.next();
         System.out.print("Enter a name for this contact: ");
@@ -160,6 +166,7 @@ public class UserMenu {
     }
 
     private void listContacts() {
+        displayHeader("Contacts List");
         Roster roster = Roster.getInstanceFor(connection);
         System.out.println("=== Contacts List ===");
         System.out.println(String.format("%-25s %-20s %-15s", "Username", "Status", "Mode"));
@@ -174,8 +181,83 @@ public class UserMenu {
         }
     }
     
+    private void manageContactsMenu(Scanner scanner) {
+        displayHeader("Manage Contacts");
+        Roster roster = Roster.getInstanceFor(connection);
+        boolean goBack = false;
+        
+        while (!goBack) {
+            System.out.println("\n=== Manage Contacts ===");
+            int i = 1;
+            for (RosterEntry entry : roster.getEntries()) {
+                BareJid jid = entry.getJid();
+                String user = jid.getLocalpartOrNull().toString();
+                System.out.println(i + ". " + user);
+                i++;
+            }
+            System.out.println(i + ". Go Back");
+            System.out.print("\nSelect a contact to view details or go back: ");
     
+            int choice = scanner.nextInt();
+            if (choice == i) {
+                goBack = true;
+            } else if (choice > 0 && choice < i) {
+                showContactDetails(roster.getEntries().toArray(new RosterEntry[0])[choice - 1]);
+            } else {
+                System.out.println("\nInvalid choice. Please try again.\n");
+            }
+        }
+    }
     
+    private void showContactDetails(RosterEntry entry) {
+        Roster roster = Roster.getInstanceFor(connection);
+        BareJid jid = entry.getJid();
+        String user = jid.getLocalpartOrNull().toString();
+        String name = entry.getName();
+        Presence presence = roster.getPresence(jid);
+        String status = presence.getStatus() != null ? presence.getStatus() : "N/A";
+        String mode = presence.getMode() != null ? presence.getMode().toString() : "available";
+        
+        // Fetching and displaying vCard information
+        VCardManager vCardManager = VCardManager.getInstanceFor(connection);
+        try {
+            VCard vCard = vCardManager.loadVCard((EntityBareJid) jid);
+            String fullName = vCard.getField("FN");
+            String email = vCard.getEmailHome();
+            String organization = vCard.getOrganization();
+            
+            // Extract address and geolocation information
+            String address = vCard.getAddressFieldHome("STREET");
+            String city = vCard.getAddressFieldHome("LOCALITY");
+            String state = vCard.getAddressFieldHome("REGION");
+            String country = vCard.getAddressFieldHome("CTRY");
+            String postalCode = vCard.getAddressFieldHome("PCODE");
+    
+            System.out.println("\n=== Contact Details ===");
+            System.out.println("Username: " + user);
+            System.out.println("Name: " + name);
+            System.out.println("Full Name (from vCard): " + fullName);
+            System.out.println("Email (from vCard): " + email);
+            System.out.println("Organization (from vCard): " + organization);
+            System.out.println("Address (from vCard): " + address);
+            System.out.println("City (from vCard): " + city);
+            System.out.println("State (from vCard): " + state);
+            System.out.println("Country (from vCard): " + country);
+            System.out.println("Postal Code (from vCard): " + postalCode);
+            System.out.println("Status: " + status);
+            System.out.println("Mode: " + mode);
+            System.out.println("========================\n");
+        } catch (SmackException.NoResponseException | XMPPException.XMPPErrorException | 
+                 SmackException.NotConnectedException | InterruptedException e) {
+            System.out.println("Failed to fetch vCard for " + user + ": " + e.getMessage());
+        }
+    }
+
+    private void displayHeader(String title) {
+        System.out.println("\n========================================");
+        System.out.println("          " + title);
+        System.out.println("========================================");
+    }
     
 
 }

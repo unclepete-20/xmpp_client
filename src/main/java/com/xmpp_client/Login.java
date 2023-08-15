@@ -22,7 +22,7 @@ public class Login {
         this.password = password;
     }
 
-    // Getter y Setter para el nombre de user
+    // Getter and Setter for the username
     public String getUser() {
         return user;
     }
@@ -31,7 +31,7 @@ public class Login {
         this.user = user;
     }
 
-    // Getter y Setter para la contraseña
+    // Getter and Setter for the password
     public String getPassword() {
         return password;
     }
@@ -40,9 +40,8 @@ public class Login {
         this.password = password;
     }
 
-
     public AbstractXMPPConnection login() throws XmppStringprepException {
-        // Lógica para iniciar sesión utilizando los atributos de user, contraseña, host y port.
+        // Logic for logging in using user, password, host, and port attributes.
         Dotenv dotenv = Dotenv.load();
 
         String username = getUser();
@@ -50,10 +49,13 @@ public class Login {
         String host = dotenv.get("HOST");
 
         String xmppDomainString = host; 
-
         DomainBareJid xmppDomain = JidCreate.domainBareFrom(xmppDomainString);
 
-        System.out.println(host);
+        System.out.println("========================================");
+        System.out.println("          Attempting to Connect          ");
+        System.out.println("  Host: " + host);
+        System.out.println("  Username: " + username);
+        System.out.println("========================================");
 
         XMPPTCPConnectionConfiguration config = XMPPTCPConnectionConfiguration.builder()
             .setUsernameAndPassword(username, password)
@@ -66,25 +68,23 @@ public class Login {
         try {
             conn.connect();
             if (conn.isConnected()) {
-                System.out.println("\nConnected to the server...\n");
+                System.out.println("\nConnected to the server successfully.\n");
             }
     
-            // Authenticate the user by calling the login() method
             conn.login(username, password);
     
-            // Check if authenticated successfully
             if (conn.isAuthenticated()) {
-                System.out.println("\nAuthenticated successfully!\n");
+                System.out.println("Authenticated successfully!\n");
             } else {
-                System.out.println("\nFailed to authenticate connection.\n");
+                System.out.println("[ERROR] Failed to authenticate connection.\n");
             }
         } catch (SmackException | IOException | XMPPException | InterruptedException e) {
+            System.out.println("[ERROR] An error occurred during connection.");
             e.printStackTrace();
         }
 
         return conn;
-        
     }
-
 }
+
 
