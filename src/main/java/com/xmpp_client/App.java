@@ -2,16 +2,17 @@ package com.xmpp_client;
 import java.io.IOException;
 import java.util.Scanner;
 
+import org.jivesoftware.smack.AbstractXMPPConnection;
+import org.jivesoftware.smack.SmackException;
+import org.jivesoftware.smack.XMPPException;
 import org.jxmpp.stringprep.XmppStringprepException;
 
-/**
- * Hello world!
- */
+
 public final class App {
     private App() {
     }
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException, XMPPException, SmackException, InterruptedException {
 
     Scanner scanner = new Scanner(System.in);
     boolean exit = false;
@@ -46,7 +47,7 @@ public final class App {
     scanner.close();
 }
 
-    private static void iniciarSesion(Scanner scanner) throws XmppStringprepException {
+    private static void iniciarSesion(Scanner scanner) throws XmppStringprepException, XMPPException, SmackException, InterruptedException {
         // Lógica para iniciar sesión
         System.out.println("== Iniciar Sesión ==");
 
@@ -59,7 +60,10 @@ public final class App {
 
         Login login = new Login(user, password);
 
-        login.login();
+        AbstractXMPPConnection connection = login.login();
+
+        UserMenu menu = new UserMenu(connection);
+        menu.showMenu(scanner);
     }
 
     private static void registrarse(Scanner scanner) throws IOException {

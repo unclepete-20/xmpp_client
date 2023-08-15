@@ -41,39 +41,48 @@ public class Login {
     }
 
 
-    public void login() throws XmppStringprepException {
+    public AbstractXMPPConnection login() throws XmppStringprepException {
         // Lógica para iniciar sesión utilizando los atributos de user, contraseña, host y port.
         Dotenv dotenv = Dotenv.load();
 
         String username = getUser();
         String password = getPassword();
         String host = dotenv.get("HOST");
-        int port = Integer.parseInt(dotenv.get("PORT"));
 
         String xmppDomainString = host; 
 
         DomainBareJid xmppDomain = JidCreate.domainBareFrom(xmppDomainString);
 
         System.out.println(host);
-        System.out.println(port);
 
         XMPPTCPConnectionConfiguration config = XMPPTCPConnectionConfiguration.builder()
             .setUsernameAndPassword(username, password)
             .setXmppDomain(xmppDomain)
             .setHost(host)
-            .setPort(port)
             .setSecurityMode(ConnectionConfiguration.SecurityMode.disabled)
             .build();
 
         AbstractXMPPConnection conn = new XMPPTCPConnection(config);
         try {
             conn.connect();
-            if(conn.isConnected()) {
+            if (conn.isConnected()) {
                 System.out.println("Connected");
+            }
+    
+            // Authenticate the user by calling the login() method
+            conn.login(username, password);
+    
+            // Check if authenticated successfully
+            if (conn.isAuthenticated()) {
+                System.out.println("Authenticated successfully");
+            } else {
+                System.out.println("Failed to authenticate connection.");
             }
         } catch (SmackException | IOException | XMPPException | InterruptedException e) {
             e.printStackTrace();
         }
+
+        return conn;
         
     }
 

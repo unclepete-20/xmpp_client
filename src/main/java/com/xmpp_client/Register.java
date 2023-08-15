@@ -51,14 +51,12 @@ public class Register {
         String username = getUser();
         String password = getPassword();
         String host = dotenv.get("HOST");
-        int port = Integer.parseInt(dotenv.get("PORT"));
 
         String xmppDomainString = host; 
 
         DomainBareJid xmppDomain = JidCreate.domainBareFrom(xmppDomainString);
 
         System.out.println(host);
-        System.out.println(port);
 
 
         try {
@@ -68,7 +66,6 @@ public class Register {
                     .setUsernameAndPassword(username, password)
                     .setXmppDomain(xmppDomain)
                     .setHost(host)
-                    .setPort(port)
                     .setSecurityMode(SecurityMode.disabled)
                     .build();
 
