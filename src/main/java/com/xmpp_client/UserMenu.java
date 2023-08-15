@@ -78,7 +78,7 @@ public class UserMenu {
                 updatedPresence = new Presence(Presence.Type.available);
                 break;
             case 2:
-                updatedPresence = new Presence(Presence.Type.available, "Away", 1, Presence.Mode.away);
+                updatedPresence = new Presence(Presence.Type.available, "Away getting coffee", 1, Presence.Mode.away);
                 break;
             case 3:
                 updatedPresence = new Presence(Presence.Type.available, "Do Not Disturb", 1, Presence.Mode.dnd);
