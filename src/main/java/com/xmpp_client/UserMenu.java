@@ -2,7 +2,13 @@ package com.xmpp_client;
 
 import org.jivesoftware.smack.AbstractXMPPConnection;
 import org.jivesoftware.smack.XMPPException;
+import org.jivesoftware.smack.chat2.Chat;
+import org.jivesoftware.smack.chat2.ChatManager;
+import org.jivesoftware.smack.packet.Message;
+import org.jivesoftware.smack.packet.MessageBuilder;
 import org.jivesoftware.smack.packet.Presence;
+import org.jivesoftware.smack.packet.StanzaBuilder;
+import org.jivesoftware.smack.packet.StanzaFactory;
 import org.jivesoftware.smack.roster.Roster;
 import org.jivesoftware.smack.roster.RosterEntry;
 import org.jivesoftware.smackx.iqregister.AccountManager;
@@ -14,7 +20,13 @@ import org.jxmpp.jid.impl.JidCreate;
 import org.jxmpp.stringprep.XmppStringprepException;
 import org.jivesoftware.smack.SmackException;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Scanner;
+import java.util.concurrent.CountDownLatch;
 
 public class UserMenu {
 
@@ -24,7 +36,7 @@ public class UserMenu {
         this.connection = connection;
     }
 
-    public void showMenu(Scanner scanner) throws XMPPException, SmackException, InterruptedException {
+    public void showMenu(Scanner scanner) throws XMPPException, SmackException, InterruptedException, IOException {
 
         boolean exit = false;
 
@@ -56,7 +68,7 @@ public class UserMenu {
                     addNewContact(scanner);
                     break;
                 case 5:
-                
+                    manageMessages(scanner);
                     break;
                 case 6:
                     manageContactsMenu(scanner);
@@ -77,7 +89,6 @@ public class UserMenu {
 
     private void updatePresence(Scanner scanner) throws SmackException.NotConnectedException, InterruptedException {
         displayHeader("Update Presence Status");
-        System.out.println("=== Update Presence Status ===");
         System.out.println("1. Available");
         System.out.println("2. Away");
         System.out.println("3. Do Not Disturb");
@@ -119,7 +130,6 @@ public class UserMenu {
         Roster roster = Roster.getInstanceFor(connection);
         Presence presence = roster.getPresence(connection.getUser().asEntityBareJidIfPossible()); // Get presence for the user's bare JID
     
-        System.out.println("=== My Profile ===");
         System.out.println("JID: " + username); // Display the entire JID
         System.out.println("Status: " + presence.getStatus());
         System.out.println("Mode: " + presence.getMode());
@@ -168,7 +178,6 @@ public class UserMenu {
     private void listContacts() {
         displayHeader("Contacts List");
         Roster roster = Roster.getInstanceFor(connection);
-        System.out.println("=== Contacts List ===");
         System.out.println(String.format("%-25s %-20s %-15s", "Username", "Status", "Mode"));
         System.out.println(String.format("%-25s %-20s %-15s", "--------", "------", "----"));
         for (RosterEntry entry : roster.getEntries()) {
@@ -187,7 +196,6 @@ public class UserMenu {
         boolean goBack = false;
         
         while (!goBack) {
-            System.out.println("\n=== Manage Contacts ===");
             int i = 1;
             for (RosterEntry entry : roster.getEntries()) {
                 BareJid jid = entry.getJid();
@@ -258,6 +266,107 @@ public class UserMenu {
         System.out.println("          " + title);
         System.out.println("========================================");
     }
+    
+    private BareJid selectContactForChat(Scanner scanner) {
+        displayHeader("Select Contact to Chat With");
+    
+        Roster roster = Roster.getInstanceFor(connection);
+        List<RosterEntry> entries = new ArrayList<>(roster.getEntries());
+    
+        int i = 1;
+        for (RosterEntry entry : entries) {
+            BareJid jid = entry.getJid();
+            String user = jid.getLocalpartOrNull().toString();
+            System.out.println(i + ". " + user);
+            i++;
+        }
+        
+        System.out.print("\nSelect a contact by number: ");
+        int choice = scanner.nextInt();
+    
+        if (choice > 0 && choice <= entries.size()) {
+            return entries.get(choice - 1).getJid();
+        } else {
+            System.out.println("\nInvalid choice. Please try again.\n");
+            return null;
+        }
+    }
+    
+    private void manageMessages(Scanner scanner) throws IOException {
+        BareJid jid = selectContactForChat(scanner);
+        if (jid == null) {
+            return;
+        }
+    
+        EntityBareJid entityBareJid;
+        try {
+            entityBareJid = JidCreate.entityBareFrom(jid);
+        } catch (XmppStringprepException e) {
+            System.out.println("Invalid JID format: " + e.getMessage());
+            return;
+        }
+    
+        ChatManager chatManager = org.jivesoftware.smack.chat2.ChatManager.getInstanceFor(connection);
+        Chat chat = chatManager.chatWith(entityBareJid);
+    
+        System.out.println("\n===========================================");
+        System.out.println("   Chatting with: " + jid.asEntityBareJidIfPossible().getLocalpart());
+        System.out.println("===========================================\n");
+
+    
+        Thread receiveMessageThread = new Thread(() -> {
+            chatManager.addIncomingListener((from, message, chat1) -> {
+                System.out.println("\n[ " + from.asEntityBareJidIfPossible().getLocalpart() + " ]: " + message.getBody() + "\n");
+                System.out.print("You: ");
+            });
+    
+            while (!Thread.currentThread().isInterrupted()) {
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    break;
+                }
+            }
+        });
+    
+        Thread sendMessageThread = new Thread(() -> {
+            System.out.print("Type 'exit' to end the chat.\nYou: ");
+            BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+            boolean endChat = false;
+            while (!endChat) {
+                try {
+                    String userMessage = reader.readLine();
+                    if ("exit".equalsIgnoreCase(userMessage)) {
+                        endChat = true;
+                        receiveMessageThread.interrupt();
+                        System.out.println("\nChat ended. Type 'exit' to return to the menu.");
+                        continue;
+                    }
+    
+                    MessageBuilder messageBuilder = StanzaBuilder.buildMessage();
+                    messageBuilder.to(entityBareJid)
+                                .setBody(userMessage);
+                    Message messageToSend = messageBuilder.build();
+                    chat.send(messageToSend);
+    
+                    System.out.print("You: ");
+    
+                } catch (SmackException.NotConnectedException | InterruptedException | IOException e) {
+                    System.out.println("Failed to send message: " + e.getMessage());
+                }
+            }
+        });
+    
+        receiveMessageThread.start();
+        sendMessageThread.start();
+    
+        try {
+            sendMessageThread.join();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+    
     
 
 }
