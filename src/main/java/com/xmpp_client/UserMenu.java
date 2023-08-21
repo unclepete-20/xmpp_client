@@ -1,6 +1,7 @@
 package com.xmpp_client;
 
 import org.jivesoftware.smack.AbstractXMPPConnection;
+import org.jivesoftware.smack.MessageListener;
 import org.jivesoftware.smack.XMPPException;
 import org.jivesoftware.smack.chat2.Chat;
 import org.jivesoftware.smack.chat2.ChatManager;
@@ -8,16 +9,23 @@ import org.jivesoftware.smack.packet.Message;
 import org.jivesoftware.smack.packet.MessageBuilder;
 import org.jivesoftware.smack.packet.Presence;
 import org.jivesoftware.smack.packet.StanzaBuilder;
-import org.jivesoftware.smack.packet.StanzaFactory;
 import org.jivesoftware.smack.roster.Roster;
 import org.jivesoftware.smack.roster.RosterEntry;
 import org.jivesoftware.smackx.iqregister.AccountManager;
+import org.jivesoftware.smackx.muc.MultiUserChat;
+import org.jivesoftware.smackx.muc.MultiUserChatManager;
 import org.jivesoftware.smackx.vcardtemp.VCardManager;
 import org.jivesoftware.smackx.vcardtemp.packet.VCard;
+import org.jivesoftware.smackx.xdata.form.FillableForm;
+import org.jivesoftware.smackx.xdata.form.Form;
 import org.jxmpp.jid.BareJid;
 import org.jxmpp.jid.EntityBareJid;
 import org.jxmpp.jid.impl.JidCreate;
+import org.jxmpp.jid.parts.Resourcepart;
 import org.jxmpp.stringprep.XmppStringprepException;
+
+import java.util.Set;
+
 import org.jivesoftware.smack.SmackException;
 
 import java.io.BufferedReader;
@@ -26,14 +34,18 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
-import java.util.concurrent.CountDownLatch;
 
 public class UserMenu {
 
     private AbstractXMPPConnection connection;
+    private final List<EntityBareJid> pendingFriendRequests = new ArrayList<>();
+    private final List<EntityBareJid> pendingGroupInvites = new ArrayList<>();
 
     public UserMenu(AbstractXMPPConnection connection) {
         this.connection = connection;
+        listenForSubscriptionRequests();
+        listenForGroupInvites();
+        listenForFriendStatusChanges();
     }
 
     public void showMenu(Scanner scanner) throws XMPPException, SmackException, InterruptedException, IOException {
@@ -48,8 +60,11 @@ public class UserMenu {
             System.out.println("4. Add new Contact");
             System.out.println("5. Manage Messages");
             System.out.println("6. Manage Contacts");
-            System.out.println("7. Delete Account");
-            System.out.println("8. Log Out");
+            System.out.println("7. Manage Groups");
+            System.out.println("8. Delete Account");
+            System.out.println("9. Manage Friend Requests");
+            System.out.println("10. Manage Group Invitations");
+            System.out.println("11. Log Out");
             System.out.print("\nEnter your choice: ");
 
             int choice = scanner.nextInt();
@@ -74,10 +89,19 @@ public class UserMenu {
                     manageContactsMenu(scanner);
                     break;
                 case 7:
+                    manageGroupChats(scanner);
+                    break;
+                case 8:
                     deleteUser();
                     exit = true;
                     break;
-                case 8:
+                case 9:
+                    manageFriendRequests(scanner);
+                    break;
+                case 10:
+                    manageGroupInvitations(scanner);
+                    break;
+                case 11:
                     logOut();
                     exit = true;
                     break;
@@ -199,7 +223,7 @@ public class UserMenu {
             int i = 1;
             for (RosterEntry entry : roster.getEntries()) {
                 BareJid jid = entry.getJid();
-                String user = jid.getLocalpartOrNull().toString();
+                String user = (jid.getLocalpartOrNull() != null) ? jid.getLocalpartOrNull().toString() : "Unknown User";
                 System.out.println(i + ". " + user);
                 i++;
             }
@@ -276,7 +300,7 @@ public class UserMenu {
         int i = 1;
         for (RosterEntry entry : entries) {
             BareJid jid = entry.getJid();
-            String user = jid.getLocalpartOrNull().toString();
+            String user = (jid.getLocalpartOrNull() != null) ? jid.getLocalpartOrNull().toString() : "Unknown User";
             System.out.println(i + ". " + user);
             i++;
         }
@@ -317,7 +341,6 @@ public class UserMenu {
         Thread receiveMessageThread = new Thread(() -> {
             chatManager.addIncomingListener((from, message, chat1) -> {
                 System.out.println("\n[ " + from.asEntityBareJidIfPossible().getLocalpart() + " ]: " + message.getBody() + "\n");
-                System.out.print("You: ");
             });
     
             while (!Thread.currentThread().isInterrupted()) {
@@ -365,6 +388,279 @@ public class UserMenu {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
+    }
+
+    private void manageGroupChats(Scanner scanner) throws XMPPException, SmackException, InterruptedException, IOException {
+        boolean goBack = false;
+    
+        while (!goBack) {
+            System.out.println("\n=== Group Chats Menu ===");
+            System.out.println("1. Create a Group");
+            System.out.println("2. Join a Group");
+            System.out.println("3. List My Groups");
+            System.out.println("4. Chat in a Group");
+            System.out.println("5. Go Back");
+            System.out.print("\nEnter your choice: ");
+    
+            int choice = scanner.nextInt();
+    
+            switch (choice) {
+                case 1:
+                    createGroup(scanner);
+                    break;
+                case 2:
+                    joinGroup(scanner);
+                    break;
+                case 3:
+                    listMyGroups();
+                    break;
+                case 4:
+                    chatInGroup(scanner);
+                    break;
+                case 5:
+                    goBack = true;
+                    break;
+                default:
+                    System.out.println("\nInvalid choice. Please try again.\n");
+            }
+        }
+    }
+    
+    private void createGroup(Scanner scanner) throws XmppStringprepException, InterruptedException {
+        displayHeader("Create Group");
+    
+        System.out.print("\nEnter the name of the group you want to create: ");
+        String roomName = scanner.next();
+    
+        MultiUserChatManager multiUserChatManager = MultiUserChatManager.getInstanceFor(connection);
+        MultiUserChat muc = multiUserChatManager.getMultiUserChat(JidCreate.entityBareFrom(roomName + "@conference.alumchat.xyz"));
+    
+        try {
+            muc.createOrJoin(Resourcepart.from(connection.getUser().getLocalpartOrNull().toString()));
+            Form configForm = muc.getConfigurationForm();
+            FillableForm answerForm = configForm.getFillableForm();
+    
+            // Assuming you want the room to be public
+            answerForm.setAnswer("muc#roomconfig_publicroom", true);
+    
+            muc.sendConfigurationForm(answerForm);
+    
+            System.out.println("Group created and joined successfully!");
+        } catch (XMPPException.XMPPErrorException | SmackException e) {
+            System.out.println("Error creating/joining the group: " + e.getMessage());
+        }
+    }
+
+    private void joinGroup(Scanner scanner) throws XmppStringprepException, InterruptedException {
+        displayHeader("Join Group");
+
+        System.out.print("\nEnter the name of the group you want to join: ");
+        String roomName = scanner.next();
+
+        MultiUserChatManager multiUserChatManager = MultiUserChatManager.getInstanceFor(connection);
+        MultiUserChat muc = multiUserChatManager.getMultiUserChat(JidCreate.entityBareFrom(roomName + "@conference.your_server.com"));
+
+        try {
+            muc.join(Resourcepart.from(connection.getUser().getLocalpartOrNull().toString()));
+            System.out.println("Group joined successfully!");
+        } catch (XMPPException.XMPPErrorException | SmackException e) {
+            System.out.println("Error joining the group: " + e.getMessage());
+        }
+    }
+
+    private void listMyGroups() {
+        MultiUserChatManager multiUserChatManager = MultiUserChatManager.getInstanceFor(connection);
+        try {
+            Set<EntityBareJid> joinedRoomsSet = multiUserChatManager.getJoinedRooms();
+            List<EntityBareJid> joinedRooms = new ArrayList<>(joinedRoomsSet);
+            System.out.println("\n=== My Groups ===");
+            for (EntityBareJid room : joinedRooms) {
+                System.out.println(room.getLocalpart().toString());
+            }
+            System.out.println("==================");
+        } catch (Exception e) {
+            System.out.println("\nFailed to list groups: " + e.getMessage());
+        }
+    }
+
+    private void chatInGroup(Scanner scanner) throws IOException {
+        System.out.print("\nEnter the name of the group to chat in: ");
+        String groupName = scanner.next();
+
+        MultiUserChatManager multiUserChatManager = MultiUserChatManager.getInstanceFor(connection);
+        EntityBareJid groupJid;
+        try {
+            groupJid = JidCreate.entityBareFrom(groupName + "@conference.yourserver.com"); // Asume que "conference.yourserver.com" es tu servicio MUC
+            MultiUserChat muc = multiUserChatManager.getMultiUserChat(groupJid);
+
+            // Para recibir mensajes
+            Thread receiveMessageThread = new Thread(() -> {
+                muc.addMessageListener(new MessageListener() {
+                    @Override
+                    public void processMessage(Message message) {
+                        System.out.println("\n[ " + message.getFrom().getResourceOrEmpty().toString() + " ]: " + message.getBody() + "\n");
+                        System.out.print("You: ");
+                    }
+                });
+
+                while (!Thread.currentThread().isInterrupted()) {
+                    try {
+                        Thread.sleep(500);
+                    } catch (InterruptedException e) {
+                        break;
+                    }
+                }
+            });
+
+            // Para enviar mensajes
+            Thread sendMessageThread = new Thread(() -> {
+                System.out.print("Type 'exit' to end the chat.\nYou: ");
+                BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+                boolean endChat = false;
+                while (!endChat) {
+                    try {
+                        String userMessage = reader.readLine();
+                        if ("exit".equalsIgnoreCase(userMessage)) {
+                            endChat = true;
+                            receiveMessageThread.interrupt();
+                            System.out.println("\nChat ended. Type 'exit' to return to the menu.");
+                            continue;
+                        }
+                        muc.sendMessage(userMessage);
+                        System.out.print("You: ");
+                    } catch (Exception e) {
+                        System.out.println("\nFailed to send message: " + e.getMessage());
+                    }
+                }
+            });
+
+            receiveMessageThread.start();
+            sendMessageThread.start();
+
+            try {
+                sendMessageThread.join();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
+        } catch (Exception e) {
+            System.out.println("\nFailed to chat in group: " + e.getMessage());
+        }
+    }
+    
+
+    private void manageFriendRequests(Scanner scanner) {
+        displayHeader("Friend Requests");
+        synchronized (pendingFriendRequests) {
+            if (pendingFriendRequests.isEmpty()) {
+                System.out.println("No pending friend requests.");
+                return;
+            }
+    
+            for (int i = 0; i < pendingFriendRequests.size(); i++) {
+                System.out.println((i + 1) + ". Friend request from: " + pendingFriendRequests.get(i));
+            }
+    
+            System.out.print("\nSelect a request to accept (0 to go back): ");
+            int choice = scanner.nextInt();
+            if (choice == 0) return;
+    
+            if (choice > 0 && choice <= pendingFriendRequests.size()) {
+                EntityBareJid fromJid = pendingFriendRequests.remove(choice - 1);
+                
+                // Accept the friend request here
+                Presence subscribed = new Presence(Presence.Type.subscribed);
+                subscribed.setTo(fromJid);
+                try {
+                    connection.sendStanza(subscribed);
+                    System.out.println("Friend request accepted successfully!");
+                    
+                    // Optional: If you also want to send a subscription request back to the user
+                    Presence subscribe = new Presence(Presence.Type.subscribe);
+                    subscribe.setTo(fromJid);
+                    connection.sendStanza(subscribe);
+                    
+                } catch (SmackException.NotConnectedException | InterruptedException e) {
+                    System.out.println("Error accepting friend request: " + e.getMessage());
+                }
+            } else {
+                System.out.println("Invalid choice.");
+            }
+        }
+    }
+    
+    
+    private void manageGroupInvitations(Scanner scanner) throws XmppStringprepException, InterruptedException {
+        displayHeader("Group Invitations");
+        synchronized (pendingGroupInvites) {
+            if (pendingGroupInvites.isEmpty()) {
+                System.out.println("No pending group invitations.");
+                return;
+            }
+    
+            for (int i = 0; i < pendingGroupInvites.size(); i++) {
+                System.out.println((i + 1) + ". Invitation to join: " + pendingGroupInvites.get(i));
+            }
+    
+            System.out.print("\nSelect an invitation to accept (0 to go back): ");
+            int choice = scanner.nextInt();
+            if (choice == 0) return;
+    
+            if (choice > 0 && choice <= pendingGroupInvites.size()) {
+                EntityBareJid roomJid = pendingGroupInvites.remove(choice - 1);
+                MultiUserChatManager multiUserChatManager = MultiUserChatManager.getInstanceFor(connection);
+                MultiUserChat muc = multiUserChatManager.getMultiUserChat(roomJid);
+                
+                // Join the group here...
+                try {
+                    muc.join(Resourcepart.from(connection.getUser().getLocalpartOrNull().toString()));
+                    System.out.println("Group joined successfully!");
+                } catch (XMPPException.XMPPErrorException | SmackException e) {
+                    System.out.println("Error joining the group: " + e.getMessage());
+                }
+            } else {
+                System.out.println("Invalid choice.");
+            }
+        }
+    }
+    
+
+    private void listenForSubscriptionRequests() {
+        connection.addAsyncStanzaListener(stanza -> {
+            if (stanza instanceof Presence) {
+                Presence presence = (Presence) stanza;
+                if (presence.getType() == Presence.Type.subscribe) {
+                    pendingFriendRequests.add(presence.getFrom().asEntityBareJidIfPossible()); // Add to the list
+                }
+            }
+        }, presenceFilter -> presenceFilter instanceof Presence && ((Presence) presenceFilter).getType() == Presence.Type.subscribe);
+    }
+    
+    
+    private void listenForGroupInvites() {
+        MultiUserChatManager manager = MultiUserChatManager.getInstanceFor(connection);
+        manager.addInvitationListener((conn, room, inviter, reason, password, message, invite) -> {
+            synchronized (pendingGroupInvites) {
+                pendingGroupInvites.add(room.getRoom());
+            }
+        });
+    }
+    
+
+    private void listenForFriendStatusChanges() {
+        connection.addAsyncStanzaListener(stanza -> {
+            if (stanza instanceof Presence) {
+                Presence presence = (Presence) stanza;
+                String from = presence.getFrom().asEntityBareJidIfPossible().toString();
+                if (presence.getType() == Presence.Type.available) {
+                    String status = presence.getStatus() != null ? presence.getStatus() : "Available";
+                    String mode = presence.getMode() != null ? presence.getMode().toString() : "Online";
+                    System.out.println("[Status Change] " + from + " is now " + mode + ": " + status);
+                } else if (presence.getType() == Presence.Type.unavailable) {
+                    System.out.println("[Status Change] " + from + " is now Offline.");
+                }
+            }
+        }, presenceFilter -> presenceFilter instanceof Presence);
     }
     
     
