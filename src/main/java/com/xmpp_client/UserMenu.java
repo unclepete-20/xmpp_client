@@ -682,6 +682,7 @@ public class UserMenu {
     
         System.out.print("Enter the path of the file you want to send: ");
         String filePath = scanner.next();
+        String fileExtension = getFileExtension(filePath);
         String encodedFile = FileBase64.encodeFileToBase64(filePath);
     
         EntityBareJid entityBareJid;
@@ -689,13 +690,12 @@ public class UserMenu {
             entityBareJid = JidCreate.entityBareFrom(jid);
             ChatManager chatManager = org.jivesoftware.smack.chat2.ChatManager.getInstanceFor(connection);
             Chat chat = chatManager.chatWith(entityBareJid);
-            chat.send("FILE:" + encodedFile);
+            chat.send("file://" + fileExtension + "://" + encodedFile);
             System.out.println("\nFile sent successfully!\n");
         } catch (XmppStringprepException | SmackException.NotConnectedException | InterruptedException e) {
             System.out.println("Error sending file: " + e.getMessage());
         }
     }
-    
 
     private void handleReceivedFiles(Scanner scanner) {
         displayHeader("Received files");
@@ -718,7 +718,10 @@ public class UserMenu {
             String outputPath = scanner.next();
             
             try {
-                FileBase64.decodeBase64ToFile(receivedFilesEncoded.remove(choice - 1), outputPath);
+                // Extracting the base64 encoded string from the received format
+                String fileData = receivedFilesEncoded.remove(choice - 1);
+                String encodedFile = fileData.split("://")[2]; // Getting the actual base64 encoded data
+                FileBase64.decodeBase64ToFile(encodedFile, outputPath);
                 System.out.println("\nFile saved successfully!\n");
             } catch (IOException e) {
                 System.out.println("There was an error saving the file: " + e.getMessage());
@@ -732,7 +735,14 @@ public class UserMenu {
         } else {
             System.out.println("Invalid choice.");
         }
-    }
+    }    
     
+    private String getFileExtension(String filePath) {
+        int lastIndex = filePath.lastIndexOf(".");
+        if (lastIndex == -1) {
+            return ""; // Sin extensión
+        }
+        return filePath.substring(lastIndex + 1);
+    }    
     
 }
