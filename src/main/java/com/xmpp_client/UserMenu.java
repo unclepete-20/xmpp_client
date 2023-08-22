@@ -664,7 +664,7 @@ public class UserMenu {
             } else if (stanza instanceof Message) {
                 // Handle file transfers
                 Message message = (Message) stanza;
-                if (message.getBody().startsWith("FILE:")) {
+                if (message.getBody().startsWith("file:")) {
                     receivedFilesEncoded.add(message.getBody().substring(5));
                     System.out.println("Received a new file. You can check it from the menu.");
                 }
@@ -691,6 +691,7 @@ public class UserMenu {
             ChatManager chatManager = org.jivesoftware.smack.chat2.ChatManager.getInstanceFor(connection);
             Chat chat = chatManager.chatWith(entityBareJid);
             chat.send("file://" + fileExtension + "://" + encodedFile);
+            System.out.println("Encoded File: " + encodedFile);
             System.out.println("\nFile sent successfully!\n");
         } catch (XmppStringprepException | SmackException.NotConnectedException | InterruptedException e) {
             System.out.println("Error sending file: " + e.getMessage());
@@ -717,19 +718,28 @@ public class UserMenu {
             System.out.print("Enter the path where you want to save the file (include filename): ");
             String outputPath = scanner.next();
             
+            String encodedStringWithFormat = receivedFilesEncoded.get(choice - 1);
+            System.out.println("Received encoded string: " + encodedStringWithFormat);
+            
+            // Split the encoded string to separate format and actual encoded data
+            String[] parts = encodedStringWithFormat.split("://");
+            if (parts.length != 2) {
+                System.out.println("Invalid encoded string format.");
+                return;
+            }
+            
             try {
-                // Extracting the base64 encoded string from the received format
-                String fileData = receivedFilesEncoded.remove(choice - 1);
-                String encodedFile = fileData.split("://")[2]; // Getting the actual base64 encoded data
-                FileBase64.decodeBase64ToFile(encodedFile, outputPath);
+                FileBase64.decodeBase64ToFile(parts[1], outputPath);
                 System.out.println("\nFile saved successfully!\n");
+                
+                // Remove the file from the list after saving
+                receivedFilesEncoded.remove(choice - 1);
             } catch (IOException e) {
                 System.out.println("There was an error saving the file: " + e.getMessage());
-                // Opcional: Aquí podrías permitir al usuario intentar de nuevo o regresar al menú.
                 System.out.println("Would you like to try again? (yes/no)");
                 String retry = scanner.next();
                 if ("yes".equalsIgnoreCase(retry)) {
-                    handleReceivedFiles(scanner); // Esto volverá a llamar a la función, permitiendo al usuario intentar de nuevo.
+                    handleReceivedFiles(scanner);
                 }
             }
         } else {
