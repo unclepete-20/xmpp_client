@@ -400,8 +400,7 @@ public class UserMenu {
             System.out.println("1. Create a Group");
             System.out.println("2. Join a Group");
             System.out.println("3. List My Groups");
-            System.out.println("4. Chat in a Group");
-            System.out.println("5. Go Back");
+            System.out.println("4. Go Back");
             System.out.print("\nEnter your choice: ");
     
             int choice = scanner.nextInt();
@@ -417,16 +416,13 @@ public class UserMenu {
                     listMyGroups();
                     break;
                 case 4:
-                    chatInGroup(scanner);
-                    break;
-                case 5:
                     goBack = true;
                     break;
                 default:
                     System.out.println("\nInvalid choice. Please try again.\n");
             }
         }
-    }
+    }    
 
     private void createGroup(Scanner scanner) throws XmppStringprepException, InterruptedException {
         displayHeader("Create Group");
@@ -457,7 +453,7 @@ public class UserMenu {
         }
     }
     
-    private void joinGroup(Scanner scanner) throws XmppStringprepException, InterruptedException {
+    private void joinGroup(Scanner scanner) throws InterruptedException, IOException {
         displayHeader("Join Group");
     
         System.out.print("\nEnter the name of the group you want to join: ");
@@ -469,10 +465,11 @@ public class UserMenu {
         try {
             muc.join(Resourcepart.from(connection.getUser().getLocalpartOrNull().toString()));
             System.out.println("Group joined successfully!");
+            chatInGroup(scanner);
         } catch (XMPPException.XMPPErrorException | SmackException e) {
             System.out.println("Error joining the group: " + e.getMessage());
         }
-    }
+    }    
 
     private void chatInGroup(Scanner scanner) throws IOException {
         System.out.print("\nEnter the name of the group to chat in: ");
@@ -688,8 +685,9 @@ public class UserMenu {
             } else if (stanza instanceof Message) {
                 // Handle file transfers
                 Message message = (Message) stanza;
-                if (message.getBody().startsWith("file:")) {
-                    receivedFilesEncoded.add(message.getBody().substring(5));
+                String body = message.getBody();
+                if (body != null && body.startsWith("file:")) {
+                    receivedFilesEncoded.add(body.substring(5));
                     System.out.println("Received a new file. You can check it from the menu.");
                 }
             }
