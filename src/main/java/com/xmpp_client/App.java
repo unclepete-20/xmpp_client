@@ -16,7 +16,7 @@ public final class App {
         boolean exit = false;
         
         System.out.println("========================================");
-        System.out.println("              WELCOME TO CHATAPP         ");
+        System.out.println("              WELCOME TO LIBBER         ");
         System.out.println("========================================");
 
         while (!exit) {
@@ -44,7 +44,7 @@ public final class App {
         }
 
         System.out.println("\n========================================");
-        System.out.println("    Gracias por usar ChatApp. ¡Adiós!   ");
+        System.out.println("    Gracias por usar Libber. ¡Adiós!   ");
         System.out.println("========================================");
         scanner.close();
     }
