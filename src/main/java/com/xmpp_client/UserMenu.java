@@ -40,18 +40,18 @@ public class UserMenu {
     private AbstractXMPPConnection connection;
     private final List<EntityBareJid> pendingFriendRequests = new ArrayList<>();
     private final List<EntityBareJid> pendingGroupInvites = new ArrayList<>();
+    private final List<String> receivedFilesEncoded = new ArrayList<>();
 
     public UserMenu(AbstractXMPPConnection connection) {
         this.connection = connection;
         listenForSubscriptionRequests();
         listenForGroupInvites();
-        listenForFriendStatusChanges();
+        listenForFriendStatusChangesAndFiles();
     }
 
     public void showMenu(Scanner scanner) throws XMPPException, SmackException, InterruptedException, IOException {
-
         boolean exit = false;
-
+    
         while (!exit) {
             System.out.println("=== User Menu ===");
             System.out.println("1. Show My Profile");
@@ -64,11 +64,13 @@ public class UserMenu {
             System.out.println("8. Delete Account");
             System.out.println("9. Manage Friend Requests");
             System.out.println("10. Manage Group Invitations");
-            System.out.println("11. Log Out");
+            System.out.println("11. Send File");
+            System.out.println("12. Handle Received Files");
+            System.out.println("13. Log Out");
             System.out.print("\nEnter your choice: ");
-
+    
             int choice = scanner.nextInt();
-
+    
             switch (choice) {
                 case 1:
                     showProfile();
@@ -102,6 +104,12 @@ public class UserMenu {
                     manageGroupInvitations(scanner);
                     break;
                 case 11:
+                    sendFile(scanner);
+                    break;
+                case 12:
+                    handleReceivedFiles(scanner);
+                    break;
+                case 13:
                     logOut();
                     exit = true;
                     break;
@@ -110,6 +118,7 @@ public class UserMenu {
             }
         }
     }
+    
 
     private void updatePresence(Scanner scanner) throws SmackException.NotConnectedException, InterruptedException {
         displayHeader("Update Presence Status");
@@ -647,9 +656,10 @@ public class UserMenu {
     }
     
 
-    private void listenForFriendStatusChanges() {
+    private void listenForFriendStatusChangesAndFiles() {
         connection.addAsyncStanzaListener(stanza -> {
             if (stanza instanceof Presence) {
+                // Handle presence changes
                 Presence presence = (Presence) stanza;
                 String from = presence.getFrom().asEntityBareJidIfPossible().toString();
                 if (presence.getType() == Presence.Type.available) {
@@ -659,8 +669,63 @@ public class UserMenu {
                 } else if (presence.getType() == Presence.Type.unavailable) {
                     System.out.println("[Status Change] " + from + " is now Offline.");
                 }
+            } else if (stanza instanceof Message) {
+                // Handle file transfers
+                Message message = (Message) stanza;
+                if (message.getBody().startsWith("FILE:")) {
+                    receivedFilesEncoded.add(message.getBody().substring(5));
+                    System.out.println("Received a new file. You can check it from the menu.");
+                }
             }
-        }, presenceFilter -> presenceFilter instanceof Presence);
+        }, stanzaFilter -> stanzaFilter instanceof Presence || stanzaFilter instanceof Message);
     }
+    
 
+    private void sendFile(Scanner scanner) throws IOException {
+        BareJid jid = selectContactForChat(scanner);
+        if (jid == null) {
+            return;
+        }
+    
+        System.out.print("Enter the path of the file you want to send: ");
+        String filePath = scanner.next();
+        String encodedFile = FileBase64.encodeFileToBase64(filePath);
+    
+        EntityBareJid entityBareJid;
+        try {
+            entityBareJid = JidCreate.entityBareFrom(jid);
+            ChatManager chatManager = org.jivesoftware.smack.chat2.ChatManager.getInstanceFor(connection);
+            Chat chat = chatManager.chatWith(entityBareJid);
+            chat.send("FILE:" + encodedFile);
+            System.out.println("File sent successfully!");
+        } catch (XmppStringprepException | SmackException.NotConnectedException | InterruptedException e) {
+            System.out.println("Error sending file: " + e.getMessage());
+        }
+    }
+    
+
+    private void handleReceivedFiles(Scanner scanner) throws IOException {
+        if (receivedFilesEncoded.isEmpty()) {
+            System.out.println("No received files.");
+            return;
+        }
+    
+        for (int i = 0; i < receivedFilesEncoded.size(); i++) {
+            System.out.println((i + 1) + ". Received File");
+        }
+    
+        System.out.print("\nSelect a file to save (0 to go back): ");
+        int choice = scanner.nextInt();
+        if (choice == 0) return;
+    
+        if (choice > 0 && choice <= receivedFilesEncoded.size()) {
+            System.out.print("Enter the path where you want to save the file: ");
+            String outputPath = scanner.next();
+            FileBase64.decodeBase64ToFile(receivedFilesEncoded.remove(choice - 1), outputPath);
+            System.out.println("File saved successfully!");
+        } else {
+            System.out.println("Invalid choice.");
+        }
+    }
+    
 }
