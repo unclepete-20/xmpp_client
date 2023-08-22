@@ -1,5 +1,4 @@
 package com.xmpp_client;
-
 import org.jivesoftware.smack.AbstractXMPPConnection;
 import org.jivesoftware.smack.MessageListener;
 import org.jivesoftware.smack.XMPPException;
@@ -23,11 +22,8 @@ import org.jxmpp.jid.EntityBareJid;
 import org.jxmpp.jid.impl.JidCreate;
 import org.jxmpp.jid.parts.Resourcepart;
 import org.jxmpp.stringprep.XmppStringprepException;
-
 import java.util.Set;
-
 import org.jivesoftware.smack.SmackException;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -148,9 +144,6 @@ public class UserMenu {
         connection.sendStanza(updatedPresence);
         System.out.println("\nPresence status updated successfully!\n");
     }
-    
-    
-    
 
     private void logOut() {
         connection.disconnect();
@@ -661,13 +654,12 @@ public class UserMenu {
             if (stanza instanceof Presence) {
                 // Handle presence changes
                 Presence presence = (Presence) stanza;
-                String from = presence.getFrom().asEntityBareJidIfPossible().toString();
+                String from = presence.getFrom().asEntityBareJidIfPossible().toString().split("@")[0]; // Just get the user part, not the domain
                 if (presence.getType() == Presence.Type.available) {
                     String status = presence.getStatus() != null ? presence.getStatus() : "Available";
-                    String mode = presence.getMode() != null ? presence.getMode().toString() : "Online";
-                    System.out.println("[Status Change] " + from + " is now " + mode + ": " + status);
+                    System.out.println(from + " is now " + status);
                 } else if (presence.getType() == Presence.Type.unavailable) {
-                    System.out.println("[Status Change] " + from + " is now Offline.");
+                    System.out.println(from + " is now Offline.");
                 }
             } else if (stanza instanceof Message) {
                 // Handle file transfers
@@ -677,11 +669,12 @@ public class UserMenu {
                     System.out.println("Received a new file. You can check it from the menu.");
                 }
             }
-        }, stanzaFilter -> stanzaFilter instanceof Presence || stanzaFilter instanceof Message);
-    }
-    
+        }, stanza -> true);  // Accepting all stanzas
+    }    
 
     private void sendFile(Scanner scanner) throws IOException {
+        displayHeader("Send File");
+        
         BareJid jid = selectContactForChat(scanner);
         if (jid == null) {
             return;
@@ -697,14 +690,16 @@ public class UserMenu {
             ChatManager chatManager = org.jivesoftware.smack.chat2.ChatManager.getInstanceFor(connection);
             Chat chat = chatManager.chatWith(entityBareJid);
             chat.send("FILE:" + encodedFile);
-            System.out.println("File sent successfully!");
+            System.out.println("\nFile sent successfully!\n");
         } catch (XmppStringprepException | SmackException.NotConnectedException | InterruptedException e) {
             System.out.println("Error sending file: " + e.getMessage());
         }
     }
     
 
-    private void handleReceivedFiles(Scanner scanner) throws IOException {
+    private void handleReceivedFiles(Scanner scanner) {
+        displayHeader("Received files");
+        
         if (receivedFilesEncoded.isEmpty()) {
             System.out.println("No received files.");
             return;
@@ -719,13 +714,25 @@ public class UserMenu {
         if (choice == 0) return;
     
         if (choice > 0 && choice <= receivedFilesEncoded.size()) {
-            System.out.print("Enter the path where you want to save the file: ");
+            System.out.print("Enter the path where you want to save the file (include filename): ");
             String outputPath = scanner.next();
-            FileBase64.decodeBase64ToFile(receivedFilesEncoded.remove(choice - 1), outputPath);
-            System.out.println("File saved successfully!");
+            
+            try {
+                FileBase64.decodeBase64ToFile(receivedFilesEncoded.remove(choice - 1), outputPath);
+                System.out.println("\nFile saved successfully!\n");
+            } catch (IOException e) {
+                System.out.println("There was an error saving the file: " + e.getMessage());
+                // Opcional: Aquí podrías permitir al usuario intentar de nuevo o regresar al menú.
+                System.out.println("Would you like to try again? (yes/no)");
+                String retry = scanner.next();
+                if ("yes".equalsIgnoreCase(retry)) {
+                    handleReceivedFiles(scanner); // Esto volverá a llamar a la función, permitiendo al usuario intentar de nuevo.
+                }
+            }
         } else {
             System.out.println("Invalid choice.");
         }
     }
+    
     
 }
