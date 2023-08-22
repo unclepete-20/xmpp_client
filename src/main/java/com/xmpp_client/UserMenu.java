@@ -3,11 +3,12 @@ package com.xmpp_client;
 import org.jivesoftware.smack.AbstractXMPPConnection;
 import org.jivesoftware.smack.MessageListener;
 import org.jivesoftware.smack.XMPPException;
-import org.jivesoftware.smack.SmackException.NotConnectedException;
 import org.jivesoftware.smack.chat2.Chat;
 import org.jivesoftware.smack.chat2.ChatManager;
 import org.jivesoftware.smack.packet.Message;
+import org.jivesoftware.smack.packet.MessageBuilder;
 import org.jivesoftware.smack.packet.Presence;
+import org.jivesoftware.smack.packet.StanzaBuilder;
 import org.jivesoftware.smack.roster.Roster;
 import org.jivesoftware.smack.roster.RosterEntry;
 import org.jivesoftware.smackx.iqregister.AccountManager;
@@ -22,9 +23,6 @@ import org.jxmpp.jid.EntityBareJid;
 import org.jxmpp.jid.impl.JidCreate;
 import org.jxmpp.jid.parts.Resourcepart;
 import org.jxmpp.stringprep.XmppStringprepException;
-import java.util.Base64;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 
 import java.util.Set;
 
@@ -42,7 +40,6 @@ public class UserMenu {
     private AbstractXMPPConnection connection;
     private final List<EntityBareJid> pendingFriendRequests = new ArrayList<>();
     private final List<EntityBareJid> pendingGroupInvites = new ArrayList<>();
-    private final List<String> receivedFilesBase64 = new ArrayList<>();
 
     public UserMenu(AbstractXMPPConnection connection) {
         this.connection = connection;
@@ -67,8 +64,7 @@ public class UserMenu {
             System.out.println("8. Delete Account");
             System.out.println("9. Manage Friend Requests");
             System.out.println("10. Manage Group Invitations");
-            System.out.println("11. Manage Group Invitations");
-            System.out.println("12. Log Out");
+            System.out.println("11. Log Out");
             System.out.print("\nEnter your choice: ");
 
             int choice = scanner.nextInt();
@@ -106,9 +102,6 @@ public class UserMenu {
                     manageGroupInvitations(scanner);
                     break;
                 case 11:
-                    manageReceivedFiles(scanner);
-                    break;
-                case 12:
                     logOut();
                     exit = true;
                     break;
@@ -347,13 +340,7 @@ public class UserMenu {
     
         Thread receiveMessageThread = new Thread(() -> {
             chatManager.addIncomingListener((from, message, chat1) -> {
-                if (message.getBody().startsWith("FILE:")) {
-                    receivedFilesBase64.add(message.getBody().substring(5)); // Omit the "FILE:" part
-                    System.out.println("\n[New File] From: " + from.asEntityBareJidIfPossible().getLocalpart() + "\n");
-                } else {
-                    System.out.println("\n[ " + from.asEntityBareJidIfPossible().getLocalpart() + " ]: " + message.getBody() + "\n");
-                }
-                System.out.print("You: ");
+                System.out.println("\n[ " + from.asEntityBareJidIfPossible().getLocalpart() + " ]: " + message.getBody() + "\n");
             });
     
             while (!Thread.currentThread().isInterrupted()) {
@@ -366,7 +353,7 @@ public class UserMenu {
         });
     
         Thread sendMessageThread = new Thread(() -> {
-            System.out.print("Type 'exit' to end the chat or 'sendfile' to send a file.\nYou: ");
+            System.out.print("Type 'exit' to end the chat.\nYou: ");
             BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
             boolean endChat = false;
             while (!endChat) {
@@ -378,17 +365,17 @@ public class UserMenu {
                         System.out.println("\nChat ended. Type 'exit' to return to the menu.");
                         continue;
                     }
-                    if ("sendfile".equalsIgnoreCase(userMessage)) {
-                        System.out.print("Enter the file path to send: ");
-                        String filePath = reader.readLine();
-                        sendFileUsingBase64(chat, filePath);
-                        System.out.print("You: ");
-                        continue;
-                    }
-                    chat.send(userMessage);
+    
+                    MessageBuilder messageBuilder = StanzaBuilder.buildMessage();
+                    messageBuilder.to(entityBareJid)
+                                .setBody(userMessage);
+                    Message messageToSend = messageBuilder.build();
+                    chat.send(messageToSend);
+    
                     System.out.print("You: ");
-                } catch (Exception e) {
-                    System.out.println("\nFailed to send message: " + e.getMessage());
+    
+                } catch (SmackException.NotConnectedException | InterruptedException | IOException e) {
+                    System.out.println("Failed to send message: " + e.getMessage());
                 }
             }
         });
@@ -675,56 +662,5 @@ public class UserMenu {
             }
         }, presenceFilter -> presenceFilter instanceof Presence);
     }
-    
-    private void manageReceivedFiles(Scanner scanner) throws IOException {
-        boolean goBack = false;
-        while (!goBack) {
-            System.out.println("\n=== Manage Received Files ===");
-            for (int i = 0; i < receivedFilesBase64.size(); i++) {
-                System.out.println((i + 1) + ". File " + (i + 1));
-            }
-            System.out.println("0. Go Back");
-            System.out.print("\nSelect a file to save or go back: ");
-            int choice = scanner.nextInt();
-            if (choice == 0) {
-                goBack = true;
-            } else if (choice > 0 && choice <= receivedFilesBase64.size()) {
-                System.out.print("Enter the path with filename to save the file: ");
-                scanner.nextLine();  // Clear buffer
-                String path = scanner.nextLine();
-                saveFileFromBase64(receivedFilesBase64.get(choice - 1), path);
-                System.out.println("File saved successfully!");
-            } else {
-                System.out.println("Invalid choice. Please try again.");
-            }
-        }
-    }
-    
-    private void saveFileFromBase64(String base64Content, String path) throws IOException {
-        byte[] data = Base64.getDecoder().decode(base64Content);
-        Files.write(Paths.get(path), data);
-    }
-    
-
-    // Convert file to Base64 encoded string
-    public static String encodeFileToBase64(String filePath) throws Exception {
-        byte[] fileContent = Files.readAllBytes(Paths.get(filePath));
-        return Base64.getEncoder().encodeToString(fileContent);
-    }
-
-    // Convert Base64 encoded string back to file
-    public static void decodeBase64ToFile(String encodedString, String outputPath) throws Exception {
-        byte[] decodedBytes = Base64.getDecoder().decode(encodedString);
-        Files.write(Paths.get(outputPath), decodedBytes);
-    }
-
-    private void sendFileUsingBase64(Chat chat, String filePath) throws IOException, NotConnectedException, InterruptedException {
-        byte[] fileBytes = Files.readAllBytes(Paths.get(filePath));
-        String encodedString = Base64.getEncoder().encodeToString(fileBytes);
-        String messageToSend = "FILE:" + Paths.get(filePath).getFileName().toString() + ":" + encodedString;
-        chat.send(messageToSend);
-    }
-  
 
 }
-
