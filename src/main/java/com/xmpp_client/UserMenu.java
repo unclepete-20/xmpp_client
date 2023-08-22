@@ -445,6 +445,9 @@ public class UserMenu {
             // Assuming you want the room to be public
             answerForm.setAnswer("muc#roomconfig_publicroom", true);
     
+            // Make the room persistent
+            answerForm.setAnswer("muc#roomconfig_persistentroom", true);
+    
             muc.sendConfigurationForm(answerForm);
     
             System.out.println("Group created and joined successfully!");
@@ -452,6 +455,7 @@ public class UserMenu {
             System.out.println("Error creating/joining the group: " + e.getMessage());
         }
     }
+    
 
     private void joinGroup(Scanner scanner) throws XmppStringprepException, InterruptedException {
         displayHeader("Join Group");
@@ -460,7 +464,7 @@ public class UserMenu {
         String roomName = scanner.next();
 
         MultiUserChatManager multiUserChatManager = MultiUserChatManager.getInstanceFor(connection);
-        MultiUserChat muc = multiUserChatManager.getMultiUserChat(JidCreate.entityBareFrom(roomName + "@conference.your_server.com"));
+        MultiUserChat muc = multiUserChatManager.getMultiUserChat(JidCreate.entityBareFrom(roomName + "@conference.alumchat.xyz"));
 
         try {
             muc.join(Resourcepart.from(connection.getUser().getLocalpartOrNull().toString()));
@@ -492,7 +496,7 @@ public class UserMenu {
         MultiUserChatManager multiUserChatManager = MultiUserChatManager.getInstanceFor(connection);
         EntityBareJid groupJid;
         try {
-            groupJid = JidCreate.entityBareFrom(groupName + "@conference.yourserver.com"); // Asume que "conference.yourserver.com" es tu servicio MUC
+            groupJid = JidCreate.entityBareFrom(groupName + "@conference.alumchat.xyz"); // Asume que "conference.yourserver.com" es tu servicio MUC
             MultiUserChat muc = multiUserChatManager.getMultiUserChat(groupJid);
 
             // Para recibir mensajes
@@ -654,13 +658,22 @@ public class UserMenu {
             if (stanza instanceof Presence) {
                 // Handle presence changes
                 Presence presence = (Presence) stanza;
-                String from = presence.getFrom().asEntityBareJidIfPossible().toString().split("@")[0]; // Just get the user part, not the domain
-                if (presence.getType() == Presence.Type.available) {
-                    String status = presence.getStatus() != null ? presence.getStatus() : "Available";
-                    System.out.println(from + " is now " + status);
-                } else if (presence.getType() == Presence.Type.unavailable) {
-                    System.out.println(from + " is now Offline.");
+    
+                EntityBareJid fromJid = presence.getFrom().asEntityBareJidIfPossible();
+                String from = null;
+                if (fromJid != null) {
+                    from = fromJid.toString().split("@")[0];
                 }
+    
+                if (from != null) {
+                    if (presence.getType() == Presence.Type.available) {
+                        String status = presence.getStatus() != null ? presence.getStatus() : "Available";
+                        System.out.println(from + " is now " + status);
+                    } else if (presence.getType() == Presence.Type.unavailable) {
+                        System.out.println(from + " is now Offline.");
+                    }
+                }
+    
             } else if (stanza instanceof Message) {
                 // Handle file transfers
                 Message message = (Message) stanza;
@@ -670,7 +683,7 @@ public class UserMenu {
                 }
             }
         }, stanza -> true);  // Accepting all stanzas
-    }    
+    }        
 
     private void sendFile(Scanner scanner) throws IOException {
         displayHeader("Send File");
