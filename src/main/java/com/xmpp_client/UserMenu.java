@@ -427,7 +427,7 @@ public class UserMenu {
             }
         }
     }
-    
+
     private void createGroup(Scanner scanner) throws XmppStringprepException, InterruptedException {
         displayHeader("Create Group");
     
@@ -438,11 +438,12 @@ public class UserMenu {
         MultiUserChat muc = multiUserChatManager.getMultiUserChat(JidCreate.entityBareFrom(roomName + "@conference.alumchat.xyz"));
     
         try {
-            muc.createOrJoin(Resourcepart.from(connection.getUser().getLocalpartOrNull().toString()));
+            muc.create(Resourcepart.from(connection.getUser().getLocalpartOrNull().toString()));
+            
             Form configForm = muc.getConfigurationForm();
             FillableForm answerForm = configForm.getFillableForm();
     
-            // Assuming you want the room to be public
+            // Make the room public
             answerForm.setAnswer("muc#roomconfig_publicroom", true);
     
             // Make the room persistent
@@ -450,22 +451,21 @@ public class UserMenu {
     
             muc.sendConfigurationForm(answerForm);
     
-            System.out.println("Group created and joined successfully!");
+            System.out.println("Group created successfully!");
         } catch (XMPPException.XMPPErrorException | SmackException e) {
-            System.out.println("Error creating/joining the group: " + e.getMessage());
+            System.out.println("Error creating the group: " + e.getMessage());
         }
     }
     
-
     private void joinGroup(Scanner scanner) throws XmppStringprepException, InterruptedException {
         displayHeader("Join Group");
-
+    
         System.out.print("\nEnter the name of the group you want to join: ");
         String roomName = scanner.next();
-
+    
         MultiUserChatManager multiUserChatManager = MultiUserChatManager.getInstanceFor(connection);
         MultiUserChat muc = multiUserChatManager.getMultiUserChat(JidCreate.entityBareFrom(roomName + "@conference.alumchat.xyz"));
-
+    
         try {
             muc.join(Resourcepart.from(connection.getUser().getLocalpartOrNull().toString()));
             System.out.println("Group joined successfully!");
@@ -474,32 +474,20 @@ public class UserMenu {
         }
     }
 
-    private void listMyGroups() {
-        MultiUserChatManager multiUserChatManager = MultiUserChatManager.getInstanceFor(connection);
-        try {
-            Set<EntityBareJid> joinedRoomsSet = multiUserChatManager.getJoinedRooms();
-            List<EntityBareJid> joinedRooms = new ArrayList<>(joinedRoomsSet);
-            System.out.println("\n=== My Groups ===");
-            for (EntityBareJid room : joinedRooms) {
-                System.out.println(room.getLocalpart().toString());
-            }
-            System.out.println("==================");
-        } catch (Exception e) {
-            System.out.println("\nFailed to list groups: " + e.getMessage());
-        }
-    }
-
     private void chatInGroup(Scanner scanner) throws IOException {
         System.out.print("\nEnter the name of the group to chat in: ");
         String groupName = scanner.next();
-
+    
         MultiUserChatManager multiUserChatManager = MultiUserChatManager.getInstanceFor(connection);
         EntityBareJid groupJid;
         try {
-            groupJid = JidCreate.entityBareFrom(groupName + "@conference.alumchat.xyz"); // Asume que "conference.yourserver.com" es tu servicio MUC
+            groupJid = JidCreate.entityBareFrom(groupName + "@conference.alumchat.xyz"); // Asume que "conference.alumchat.xyz" es tu servicio MUC
             MultiUserChat muc = multiUserChatManager.getMultiUserChat(groupJid);
-
-            // Para recibir mensajes
+    
+            System.out.println("\n===========================================");
+            System.out.println("   Chatting in group: " + groupName);
+            System.out.println("===========================================\n");
+    
             Thread receiveMessageThread = new Thread(() -> {
                 muc.addMessageListener(new MessageListener() {
                     @Override
@@ -508,7 +496,7 @@ public class UserMenu {
                         System.out.print("You: ");
                     }
                 });
-
+    
                 while (!Thread.currentThread().isInterrupted()) {
                     try {
                         Thread.sleep(500);
@@ -517,8 +505,7 @@ public class UserMenu {
                     }
                 }
             });
-
-            // Para enviar mensajes
+    
             Thread sendMessageThread = new Thread(() -> {
                 System.out.print("Type 'exit' to end the chat.\nYou: ");
                 BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
@@ -532,25 +519,43 @@ public class UserMenu {
                             System.out.println("\nChat ended. Type 'exit' to return to the menu.");
                             continue;
                         }
+    
                         muc.sendMessage(userMessage);
                         System.out.print("You: ");
+    
                     } catch (Exception e) {
                         System.out.println("\nFailed to send message: " + e.getMessage());
                     }
                 }
             });
-
+    
             receiveMessageThread.start();
             sendMessageThread.start();
-
+    
             try {
                 sendMessageThread.join();
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
-
+    
         } catch (Exception e) {
             System.out.println("\nFailed to chat in group: " + e.getMessage());
+        }
+    }
+    
+    
+    private void listMyGroups() {
+        MultiUserChatManager multiUserChatManager = MultiUserChatManager.getInstanceFor(connection);
+        try {
+            Set<EntityBareJid> joinedRoomsSet = multiUserChatManager.getJoinedRooms();
+            List<EntityBareJid> joinedRooms = new ArrayList<>(joinedRoomsSet);
+            System.out.println("\n=== My Groups ===");
+            for (EntityBareJid room : joinedRooms) {
+                System.out.println(room.getLocalpart().toString());
+            }
+            System.out.println("==================");
+        } catch (Exception e) {
+            System.out.println("\nFailed to list groups: " + e.getMessage());
         }
     }
     
@@ -660,9 +665,15 @@ public class UserMenu {
                 Presence presence = (Presence) stanza;
     
                 EntityBareJid fromJid = presence.getFrom().asEntityBareJidIfPossible();
-                String from = null;
-                if (fromJid != null) {
-                    from = fromJid.toString().split("@")[0];
+                if (fromJid == null) {
+                    System.out.println("Error: From JID is null.");
+                    return;
+                }
+            
+                String from = fromJid.toString().split("@")[0]; 
+                if (from == null) {
+                    System.out.println("Error: Unable to parse user part from JID.");
+                    return;
                 }
     
                 if (from != null) {
